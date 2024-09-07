@@ -1,3 +1,4 @@
+const Fuse = require('fuse.js')
 const express = require('express')
 const request = require('request');
 const dotenv = require('dotenv');
@@ -21,8 +22,26 @@ if (!fs.existsSync(tab_directory)) {
 }
 
 //NOTE: it may be worth doing this on-demand, instead of loading all at startup
-const tabs = fs.readdirSync(tab_directory);
+const tabs = fs.readdirSync(tab_directory).map(tab => {
+    const [artist, name] = tab.split(" - ");
+    return {
+        file: tab,
+        artist,
+        name
+    }
+})
 
+const fuse = new Fuse(tabs, {
+    isCaseSensitive: false,
+    shouldSort: true,
+    // Assume song titles should be really close to the tab title.
+    distance: 10,
+    includeScore: true,
+    keys: [
+        "artist",
+        "name"
+    ]
+});
 
 const generateRandomString = function (length) {
     let text = '';
@@ -71,12 +90,13 @@ app.get('/auth/callback', (req, res) => {
     };
 
     request.post(authOptions, function (error, response, body) {
-        console.log('Received response from spotify token api', error, response, body);
         if (!error && response.statusCode === 200) {
             access_token = body.access_token;
             console.log('Posted to token api, redirecting to /')
             res.redirect('/')
             pollSong();
+        } else {
+            console.log('Received error on auth request', error, response, body);
         }
     });
 
@@ -113,40 +133,49 @@ const pollSong = () => {
         //TODO: token refreshing
         // Handle bad responses (e.g. 401)
         // Gracefully handle a 204 (when music isn't playing)
-        console.log(response);
+        if (!response.ok) {
+            console.log('Received bad poll-song response', response);
+        }
         return response.json()
     }).then(json => {
-        console.log(json);
         const {item} = json;
         if (item) {
             const {name, artists} = item;
-            console.log('Listening to', name, artists);
+            console.log('Listening to', name, artists.map(artist => artist.name));
             // check if this is a new song
             if (old_song_name !== name) {
                 //N.b. assuming that the name is sufficient (this is definitely not always true)
                 // TODO: check that the artists have changed too.
 
                 // the song changed!
-                //find the local file
-                // TODO: how do we handle multiple tabs?
+
+                // Assume that the tab name contains exactly 1 artist, and use a logical or to search for them.
+                const results = fuse.search({
+                    $and: [
+                        {
+                            $or: artists.map(artist => {
+                                return {artist: artist.name}
+                            })
+                        },
+                        {name: name}
+                    ]
+                })
+
+
+                // TODO: how do we handle multiple matches?
                 //  Right now we just take the first one by virtue of using collection.find
                 //  In theory there could be a more correct or 'better' tab based on the artist etc.
-                const tab = tabs.find(unparsed_tab => {
-                    const tab = unparsed_tab.toLowerCase();
-                    // TODO: this assumes the tab name contains the artist and the song name
-                    //  Some people might like to structure in folders instead
-                    const tab_contains_artist = artists.some(artist => tab.includes(artist.name.toLowerCase()));
-                    return tab.includes(name.toLowerCase()) && tab_contains_artist;
-                })
+                const tab = results.length > 0 ? results[0].item.file : null;
                 if (tab) {
+                    console.log('Opening tab', tab);
+                    // TODO: this line will break if a file contains an inverted comma
                     child_process.exec(`${open_tab_command} '${path.join(tab_directory, tab)}'`, (error, stdout, stderr) => {
                         if (error) {
                             // TODO: can we handle errors at all here?
                             console.error(`exec error: ${error}`);
-                            return;
+                            console.log(`stdout: ${stdout}`);
+                            console.error(`stderr: ${stderr}`);
                         }
-                        console.log(`stdout: ${stdout}`);
-                        console.error(`stderr: ${stderr}`);
                     });
                 } else {
                     // Can we do anything else here?
@@ -166,3 +195,4 @@ const pollSong = () => {
         poll_song_timeout = setTimeout(pollSong, POLL_DELAY_MS);
     });
 }
+child_process.exec(`xdg-open http://localhost:${process.env.PORT}`)
