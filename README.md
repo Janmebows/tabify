@@ -1,50 +1,52 @@
 # Tabify
 
-A small tool to open tabs automatically while listening to spotify.
+A small tool to open tabs automatically while listening to music.
 Designed to streamline play-along sessions.
 
-Based on the Spotify developer start up project
-## Using the app
-
-You will need to register your app and get your own credentials from the
-[Spotify for Developers Dashboard](https://developer.spotify.com/dashboard/)
-
-To do so, go to your Spotify for Developers Dashboard, create your
-application and register the following callback URI:
-
-`http://localhost:{PORT}/auth/callback`
-Where `{PORT}` is the port configured in your `.env` file (see below).
-
-Once you have created your app, create a file called `.env` in the root folder
-of the repository with the required credentials and configuration:
-
-```bash
-SPOTIFY_CLIENT_ID #Client_ID Configured in Spotify developers dashboard
-SPOTIFY_CLIENT_SECRET #Client_Secret configured in Spotify developers dashboard
-OPEN_COMMAND # Command to run on CLI for opening tabs. A safe value on linux is xdg-open
-TAB_DIRECTORY # Parent-most Directory tab files are found in
-SERVER_PORT #Port for the backend / main application
-PORT #Port for the frontend (must be different to server port)
-```
-
+## Setup
 ## Installation
 
-These examples run on Node.js. On its
-[website](http://www.nodejs.org/download/) you can find instructions on how to
-install it.
+These runs on
+[nodejs](http://www.nodejs.org/download/). Their website explains how nodejs is installed.
 
-Once installed, clone the repository and install its dependencies running:
+Once installed, clone this repository and install its dependencies running:
 
 ```bash
 npm install
 ```
-
-## Running the example
-
-Start both client and server with the following command:
-
+## Settings
+The application is configured via the config.js file.
+The configuration includes:
 ```bash
-npm run dev
+OPEN_COMMAND # Command to run on CLI for opening tabs. A safe value on linux is xdg-open
+TAB_DIRECTORY # Parent-most Directory tab files are found in
 ```
 
-The React application will start on `http://localhost:{PORT}`
+## Running
+
+The application can now be run with
+
+```bash
+npm start
+```
+
+The application will run within the console, listening in to any media playing on your machine.
+When a new song is played, it will attempt to find a tab in the tabs folder, and open it in your tab software.
+
+
+## Notes / Caveats:
+
+Tab-names are assumed to follow the naming convention of `artist - songname.extension`.
+
+The filesystem is checked eagerly for tabs. This will reduce runtime I/O latency. 
+If new tabs are fetched/installed, the application will have to be re-run.
+
+While the TAB_DIRECTORY is validated immediately, the OPEN_COMMAND is not validated, just executed when a tab is found with the path to the tab file as the only argument.
+E.g. if your OPEN_COMMAND was 'xdg-open', your tabs folder is '/path/to/tabs'  and the tab 'tab-name.gp' is found, then the executed command will be:
+`xdg-open '/path/to/tabs/tab-name.gp'`
+
+
+The application currently will not gracefully handle file names which include inverted commas: `'`.
+Special characters, and songs with multiple artists may also lead to inconsistent results.
+
+

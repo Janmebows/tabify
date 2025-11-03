@@ -1,12 +1,13 @@
 const Fuse = require("fuse.js");
-const dotenv = require("dotenv");
 const child_process = require("child_process");
 const fs = require("fs");
 const path = require("node:path");
-dotenv.config();
-
-const open_tab_command = process.env.OPEN_COMMAND;
-const tab_directory = process.env.TAB_DIRECTORY;
+const {
+    TAB_DIRECTORY: tab_directory,
+    TAB_DIRECTORY_RECURSE: tab_directory_recurse,
+    OPEN_COMMAND: open_tab_command,
+} = require("../config.js");
+const {TAB_DIRECTORY_RECURSE} = require("../config");
 
 if (!fs.existsSync(tab_directory)) {
     console.error("Could not find tab directory on system", tab_directory);
@@ -14,7 +15,7 @@ if (!fs.existsSync(tab_directory)) {
 }
 
 //NOTE: it may be worth doing this on-demand, instead of loading all at startup
-const tabs = fs.readdirSync(tab_directory).map((tab) => {
+const tabs = fs.readdirSync(tab_directory, { recursive: tab_directory_recurse ?? true}).map((tab) => {
     const [artist, name] = tab.split(" - ");
     return {
         file: tab,
@@ -33,7 +34,6 @@ const fuse = new Fuse(tabs, {
 });
 
 const musicmetadata = child_process.spawn("playerctl", [
-    // "-p", "spotify",
     "metadata",
     "--format",
     '{"title":"{{title}}", "artist":"{{artist}}"}',
